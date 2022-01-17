@@ -19,7 +19,6 @@ jobs:
           zip -r ../WD_LoginDataFix.zip WD_LoginDataFix/*
           echo "Created ZIP archive!"
 
-      - name: "Release"
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
