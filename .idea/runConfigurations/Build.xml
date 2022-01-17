@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Build" type="PhpLocalRunConfigurationType" factoryName="PHP Console" path="$PROJECT_DIR$/build.php">
+    <CommandLine parameters="-dphar.readonly=0">
+      <PhpTestInterpreterSettings>
+        <option name="interpreterName" value="PHP8 - pmmp" />
+      </PhpTestInterpreterSettings>
+    </CommandLine>
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,31 @@
+name: "Build & Release"
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  update-pack-version:
+    name: "Build & Release"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Building
+        run: "php -dphar.readonly=0 build.php"
+
+      - name: "Creating ZIP archive"
+        run: |
+          cd out/
+          zip -r ../WD_LoginDataFix.zip WD_LoginDataFix/*
+          echo "Created ZIP archive!"
+
+      - name: "Release"
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Release"
+          files: |
+            out/WD_LoginDataFix.zip
+            out/WD_LoginDataFix.phar

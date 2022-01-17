@@ -1,0 +1,21 @@
+{
+    "name": "xxarox/waterdogpe-login-extra-data-fix",
+    "description": "Fix for waterdogpe login extra data.",
+    "type": "project",
+    "require-dev": {
+        "pocketmine/pocketmine-mp": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "xxAROX\\WDFix\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "xxAROX",
+            "email": "arox.email.0@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {}
+}
