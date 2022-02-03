@@ -48,6 +48,7 @@ class WDFix extends PluginBase implements Listener{
 	 * @return void
 	 * @throws ReflectionException
 	 * @priority MONITOR
+	 * @handleCancelled true
 	 */
 	public function DataPacketReceiveEvent(DataPacketReceiveEvent $event): void{
 		$packet = $event->getPacket();
