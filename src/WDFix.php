@@ -28,9 +28,17 @@ use pocketmine\network\mcpe\protocol\types\login\ClientData;
 use pocketmine\network\PacketHandlingException;
 use pocketmine\player\XboxLivePlayerInfo;
 use pocketmine\plugin\PluginBase;
+use pocketmine\plugin\PluginDescription;
+use pocketmine\plugin\PluginLoader;
+use pocketmine\plugin\ResourceProvider;
+use pocketmine\scheduler\AsyncPool;
+use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
+use pocketmine\utils\Internet;
+use pocketmine\utils\SingletonTrait;
 use ReflectionClass;
 use ReflectionException;
+use Throwable;
 
 
 /**
@@ -42,6 +50,77 @@ use ReflectionException;
  * @project WaterdogPE-LoginExtras-Fixer
  */
 class WDFix extends PluginBase implements Listener{
+	use SingletonTrait{
+		setInstance as private;
+		reset as private;
+	}
+
+
+	/**
+	 * WDFix constructor.
+	 * @param PluginLoader $loader
+	 * @param Server $server
+	 * @param PluginDescription $description
+	 * @param string $dataFolder
+	 * @param string $file
+	 * @param ResourceProvider $resourceProvider
+	 */
+	public function __construct(PluginLoader $loader, Server $server, PluginDescription $description, string $dataFolder, string $file, ResourceProvider $resourceProvider){
+		parent::__construct($loader, $server, $description, $dataFolder, $file, $resourceProvider);
+		self::setInstance($this);
+	}
+
+	/**
+	 * Function onLoad
+	 * @return void
+	 */
+	protected function onLoad(): void{
+		$this->checkForUpdate();
+	}
+
+	/**
+	 * Function onEnable
+	 * @return void
+	 */
+	protected function onEnable(): void{
+		if (Server::getInstance()->getOnlineMode()) {
+			$this->getLogger()->alert("WaterdogPE-LoginExtras-Fix is not compatible with online mode!");
+			$this->getLogger()->warning("§ePlease set §f'§2xbox-auth§f' §ein §6server.properties §eto §f'§coff§f'");
+			$this->getLogger()->warning("Then restart the server!");
+		} else {
+			$this->getServer()->getPluginManager()->registerEvents($this, $this);
+		}
+	}
+
+	/**
+	 * Function checkForUpdate
+	 * @return void
+	 */
+	private function checkForUpdate(): void{
+		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion()) extends AsyncTask{
+			public function __construct(protected string $version) {}
+			public function onRun(): void{
+				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/main/plugin.yml");
+				if ($result->getCode() !== 200) return;
+				try {
+					$pluginYml = yaml_parse($result->getBody());
+				} catch (Throwable $e) {
+					return;
+				}
+				if (!$pluginYml) return;
+				$this->setResult($pluginYml["version"] ?? null);
+			}
+			public function onCompletion(): void{
+				$newVersion = $this->getResult();
+				if ($newVersion === null) return;
+				if (version_compare($newVersion, $this->version, ">")) {
+					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
+					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/latest");
+				}
+			}
+		});
+	}
+
 	/**
 	 * Function DataPacketReceiveEvent
 	 * @param DataPacketReceiveEvent $event
@@ -104,20 +183,6 @@ class WDFix extends PluginBase implements Listener{
 				$property->setValue($event->getOrigin(), $clientData["Waterdog_IP"]);
 			}
 			unset($clientData);
-		}
-	}
-
-	/**
-	 * Function onEnable
-	 * @return void
-	 */
-	protected function onEnable(): void{
-		if (Server::getInstance()->getOnlineMode()) {
-			$this->getLogger()->alert("WaterdogPE-LoginExtras-Fix is not compatible with online mode!");
-			$this->getLogger()->warning("§ePlease set §f'§2xbox-auth§f' §ein §6server.properties §eto §f'§coff§f'");
-			$this->getLogger()->warning("Then restart the server!");
-		} else {
-			$this->getServer()->getPluginManager()->registerEvents($this, $this);
 		}
 	}
 }
