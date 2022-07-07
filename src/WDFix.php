@@ -112,6 +112,12 @@ class WDFix extends PluginBase implements Listener{
 	 * @return void
 	 */
 	protected function onEnable(): void{
-		$this->getServer()->getPluginManager()->registerEvents($this, $this);
+		if (Server::getInstance()->getOnlineMode()) {
+			$this->getLogger()->alert("WaterdogPE-LoginExtras-Fix is not compatible with online mode!");
+			$this->getLogger()->warning("§ePlease set §f'§2xbox-auth§f' §ein §6server.properties §eto §f'§coff§f'");
+			$this->getLogger()->warning("Then restart the server!");
+		} else {
+			$this->getServer()->getPluginManager()->registerEvents($this, $this);
+		}
 	}
 }
