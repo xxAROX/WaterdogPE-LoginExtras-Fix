@@ -1,9 +1,9 @@
 name: "WD_LoginDataFix"
-version: "1.2"
+version: "1.3"
 author: "xxAROX"
 website: "https://github.com/xxAROX/"
 description: "WaterdogPE login extra-data fix by xxAROX."
-prefix: "WD-LoginData Fix"
+prefix: "WaterdogPE-LoginExtras-Fix"
 
 api: [ "4.0.0" ]
 main: xxAROX\WDFix\WDFix

@@ -31,7 +31,6 @@ use pocketmine\plugin\PluginBase;
 use pocketmine\plugin\PluginDescription;
 use pocketmine\plugin\PluginLoader;
 use pocketmine\plugin\ResourceProvider;
-use pocketmine\scheduler\AsyncPool;
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
 use pocketmine\utils\Internet;
@@ -50,6 +49,9 @@ use Throwable;
  * @project WaterdogPE-LoginExtras-Fixer
  */
 class WDFix extends PluginBase implements Listener{
+	private static bool $KICK_PLAYERS = false;
+	private static string $KICK_MESSAGE = "";
+
 	use SingletonTrait{
 		setInstance as private;
 		reset as private;
@@ -75,6 +77,9 @@ class WDFix extends PluginBase implements Listener{
 	 * @return void
 	 */
 	protected function onLoad(): void{
+		$this->saveResource("config.yml");
+		self::$KICK_PLAYERS = $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", true);
+		self::$KICK_MESSAGE = $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §3Waterdog§c!§f\n§cPlease connect to §3Waterdog§c!");
 		$this->checkForUpdate();
 	}
 
@@ -84,41 +89,17 @@ class WDFix extends PluginBase implements Listener{
 	 */
 	protected function onEnable(): void{
 		if (Server::getInstance()->getOnlineMode()) {
-			$this->getLogger()->alert("WaterdogPE-LoginExtras-Fix is not compatible with online mode!");
+			$this->getLogger()->alert( $this->getDescription()->getPrefix() . " is not compatible with online mode!");
 			$this->getLogger()->warning("§ePlease set §f'§2xbox-auth§f' §ein §6server.properties §eto §f'§coff§f'");
 			$this->getLogger()->warning("Then restart the server!");
 		} else {
 			$this->getServer()->getPluginManager()->registerEvents($this, $this);
+			if (self::$KICK_PLAYERS) {
+				$this->getLogger()->alert("§cPlayers will be kicked if they are not authenticated to §3Waterdog§c!§r");
+			} else {
+				$this->getLogger()->alert("§aPlayers will §nnot§r§a be kicked if they are not authenticated to §3Waterdog§a!§r");
+			}
 		}
-	}
-
-	/**
-	 * Function checkForUpdate
-	 * @return void
-	 */
-	private function checkForUpdate(): void{
-		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion()) extends AsyncTask{
-			public function __construct(protected string $version) {}
-			public function onRun(): void{
-				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/main/plugin.yml");
-				if ($result->getCode() !== 200) return;
-				try {
-					$pluginYml = yaml_parse($result->getBody());
-				} catch (Throwable $e) {
-					return;
-				}
-				if (!$pluginYml) return;
-				$this->setResult($pluginYml["version"] ?? null);
-			}
-			public function onCompletion(): void{
-				$newVersion = $this->getResult();
-				if ($newVersion === null) return;
-				if (version_compare($newVersion, $this->version, ">")) {
-					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
-					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/latest");
-				}
-			}
-		});
 	}
 
 	/**
@@ -136,6 +117,10 @@ class WDFix extends PluginBase implements Listener{
 				[, $clientData,] = JwtUtils::parse($packet->clientDataJwt);
 			} catch (JwtException $e) {
 				throw PacketHandlingException::wrap($e);
+			}
+			if (!isset($clientData["Waterdog_XUID"]) && $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", false)) {
+				$event->getOrigin()->disconnect(str_replace("{PREFIX}", $this->getDescription()->getPrefix(), self::$KICK_MESSAGE));
+				return;
 			}
 			$event->getOrigin()->setHandler(new class(Server::getInstance(), $event->getOrigin(), function (XboxLivePlayerInfo $info) use ($event, $clientData, $packet): void{
 				$class = new ReflectionClass($event->getOrigin());
@@ -186,5 +171,35 @@ class WDFix extends PluginBase implements Listener{
 			}
 			unset($clientData);
 		}
+	}
+
+	/**
+	 * Function checkForUpdate
+	 * @return void
+	 */
+	private function checkForUpdate(): void{
+		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion()) extends AsyncTask{
+			public function __construct(protected string $version) {}
+			public function onRun(): void{
+				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/main/plugin.yml");
+				if (is_null($result)) return; // NOTE: no internet connection
+				if ($result->getCode() !== 200) return;
+				try {
+					$pluginYml = yaml_parse($result->getBody());
+				} catch (Throwable $e) {
+					return;
+				}
+				if (!$pluginYml) return;
+				$this->setResult($pluginYml["version"] ?? null);
+			}
+			public function onCompletion(): void{
+				$newVersion = $this->getResult();
+				if ($newVersion === null) return;
+				if (version_compare($newVersion, $this->version, ">")) {
+					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
+					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/latest");
+				}
+			}
+		});
 	}
 }
