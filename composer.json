@@ -2,6 +2,7 @@
     "name": "xxarox/waterdogpe-login-extra-data-fix",
     "description": "Fix for waterdogpe login extra data.",
     "type": "project",
+    "version": "1.4.2",
     "require-dev": {
         "pocketmine/pocketmine-mp": "^4.0"
     },
