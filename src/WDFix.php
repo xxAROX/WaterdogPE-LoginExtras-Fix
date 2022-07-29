@@ -118,11 +118,15 @@ class WDFix extends PluginBase implements Listener{
 			} catch (JwtException $e) {
 				throw PacketHandlingException::wrap($e);
 			}
-			if (!isset($clientData["Waterdog_XUID"]) && $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", false)) {
+			if (
+				(!isset($clientData["Waterdog_XUID"]) || !isset($clientData["Waterdog_IP"]))
+				&& $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", false)
+			) {
 				$event->getOrigin()->disconnect(str_replace("{PREFIX}", $this->getDescription()->getPrefix(), self::$KICK_MESSAGE));
 				return;
 			}
-			$event->getOrigin()->setHandler(new class(Server::getInstance(), $event->getOrigin(), function (XboxLivePlayerInfo $info) use ($event, $clientData, $packet): void{
+			$event->getOrigin()->setHandler(
+				new class(Server::getInstance(), $event->getOrigin(), function (XboxLivePlayerInfo $info) use ($event, $clientData, $packet): void{
 				$class = new ReflectionClass($event->getOrigin());
 				$property = $class->getProperty("info");
 				$property->setAccessible(true);
@@ -162,12 +166,19 @@ class WDFix extends PluginBase implements Listener{
 					}
 					return $clientData;
 				}
-			});
+			}
+			);
 			if (isset($clientData["Waterdog_IP"])) {
 				$class = new ReflectionClass($event->getOrigin());
 				$property = $class->getProperty("ip");
 				$property->setAccessible(true);
 				$property->setValue($event->getOrigin(), $clientData["Waterdog_IP"]);
+			}
+			if (isset($clientData["Waterdog_XUID"])) {
+				$class = new ReflectionClass($event->getOrigin());
+				$property = $class->getProperty("xuid");
+				$property->setAccessible(true);
+				$property->setValue($event->getOrigin(), $clientData["Waterdog_XUID"]);
 			}
 			unset($clientData);
 		}
