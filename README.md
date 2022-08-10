@@ -1,5 +1,6 @@
 # WaterdogPE-LoginExtras-Fix
-> #### Report bugs [here](/../../issues/new)
+> #### Report bugs [here](https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/issues/new?template=bug-report.yml)
+> #### Suggestions [here](https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/issues/new?template=feature-request.yml)
 
 ### Features
 - Players that join over WaterdogPE have the original IP-Address & XUID.

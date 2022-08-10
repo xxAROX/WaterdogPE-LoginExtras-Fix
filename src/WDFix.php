@@ -17,12 +17,14 @@
  */
 declare(strict_types=1);
 namespace xxAROX\WDFix;
+use JsonMapper;
 use JsonMapper_Exception;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\network\mcpe\handler\LoginPacketHandler;
 use pocketmine\network\mcpe\JwtException;
 use pocketmine\network\mcpe\JwtUtils;
+use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\mcpe\protocol\types\login\ClientData;
 use pocketmine\network\PacketHandlingException;
@@ -37,8 +39,62 @@ use pocketmine\utils\Internet;
 use pocketmine\utils\SingletonTrait;
 use ReflectionClass;
 use ReflectionException;
+use ReflectionProperty;
 use Throwable;
 
+
+/**
+ * Class WaterdogExtrasLoginPacketHandler
+ * @package xxAROX\WDFix
+ * @author Jan Sohn / xxAROX
+ * @date 10. August, 2022 - 18:25
+ * @ide PhpStorm
+ * @project WaterdogPE-LoginExteras-Fixer
+ */
+class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
+	public function __construct(Server $server, NetworkSession $session, string $Waterdog_XUID){
+		$playerInfoConsumer = function (XboxLivePlayerInfo $info) use ($session, $Waterdog_XUID): void{
+			$class = new ReflectionClass($session);
+			$property = $class->getProperty("info");
+			$property->setAccessible(true);
+			$property->setValue($session, new XboxLivePlayerInfo($Waterdog_XUID, $info->getUsername(), $info->getUuid(), $info->getSkin(), $info->getLocale(), $info->getExtraData()));
+		};
+		$authCallback = function (bool $isAuthenticated, bool $authRequired, ?string $error, ?string $clientPubKey) use ($session): void{
+			$class = new ReflectionClass($session);
+			$method = $class->getMethod("setAuthenticationStatus");
+			$method->setAccessible(true);
+			$method->invoke($session, $isAuthenticated, $authRequired, $error, $clientPubKey);
+		};
+		parent::__construct($server, $session, $playerInfoConsumer, $authCallback);
+	}
+	/**
+	 * Function parseClientData
+	 * @param string $clientDataJwt
+	 * @return ClientData
+	 */
+	protected function parseClientData(string $clientDataJwt): ClientData{
+		try {
+			[, $clientDataClaims,] = JwtUtils::parse($clientDataJwt);
+		} catch (JwtException $e) {
+			throw PacketHandlingException::wrap($e);
+		}
+		$mapper = new JsonMapper;
+		$mapper->bEnforceMapType = false;
+		$mapper->bExceptionOnMissingData = true;
+		$mapper->bExceptionOnUndefinedProperty = true;
+		try {
+			$clientDataProperties = array_map(fn (ReflectionProperty $property) => $property->getName(), (new ReflectionClass(ClientData::class))->getProperties());
+			foreach ($clientDataClaims as $k => $v) {
+				if (!in_array($k, $clientDataProperties)) unset($clientDataClaims[$k]);
+			}
+			unset($properties);
+			$clientData = $mapper->map($clientDataClaims, new ClientData);
+		} catch (JsonMapper_Exception $e) {
+			throw PacketHandlingException::wrap($e);
+		}
+		return $clientData;
+	}
+}
 
 /**
  * Class WDFix
@@ -73,14 +129,45 @@ class WDFix extends PluginBase implements Listener{
 	}
 
 	/**
+	 * Function checkForUpdate
+	 * @param bool $development
+	 * @return void
+	 */
+	private function checkForUpdate(bool $development = false): void{
+		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion(), $development) extends AsyncTask{
+			public function __construct(protected string $version, protected bool $development) {}
+			public function onRun(): void{
+				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/" . ($this->development ? "development" : "main") . "/plugin.yml");
+				if (is_null($result)) return; // NOTE: no internet connection
+				if ($result->getCode() !== 200) return;
+				try {
+					$pluginYml = yaml_parse($result->getBody());
+				} catch (Throwable $e) {
+					return;
+				}
+				if (!$pluginYml) return;
+				$this->setResult($pluginYml["version"] ?? null);
+			}
+			public function onCompletion(): void{
+				$newVersion = $this->getResult();
+				if ($newVersion === null) return;
+				if (version_compare($newVersion, $this->version, ">")) {
+					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
+					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/" . ($this->development ? "dev" : "v{$newVersion}"));
+				}
+			}
+		});
+	}
+
+	/**
 	 * Function onLoad
 	 * @return void
 	 */
 	protected function onLoad(): void{
 		$this->saveResource("config.yml");
-		self::$KICK_PLAYERS = $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", true);
-		self::$KICK_MESSAGE = $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §3Waterdog§c!§f\n§cPlease connect to §3Waterdog§c!");
-		$this->checkForUpdate();
+		self::$KICK_PLAYERS = (boolean)$this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", true);
+		self::$KICK_MESSAGE = $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect to §3Waterdog§c!");
+		$this->checkForUpdate(str_ends_with($this->getDescription()->getVersion(), "-dev"));
 	}
 
 	/**
@@ -88,16 +175,23 @@ class WDFix extends PluginBase implements Listener{
 	 * @return void
 	 */
 	protected function onEnable(): void{
-		if (Server::getInstance()->getOnlineMode()) {
-			$this->getLogger()->alert( $this->getDescription()->getPrefix() . " is not compatible with online mode!");
+		$needServerRestart = false;
+		if ($this->getServer()->getConfigGroup()->getPropertyBool("player.verify-xuid", true)) {
+			$this->getLogger()->warning("§eMay {$this->getDescription()->getPrefix()} dosn't work correctly fo prevent bugs set §f'§2player.verify-xuid§f' §ein §6pocketmine.yml §eto §f'§cfalse§f'");
+			$needServerRestart = true;
+		}
+		if ($this->getServer()->getOnlineMode()) {
+			$this->getLogger()->alert($this->getDescription()->getPrefix() . " is not compatible with online mode!");
 			$this->getLogger()->warning("§ePlease set §f'§2xbox-auth§f' §ein §6server.properties §eto §f'§coff§f'");
-			$this->getLogger()->warning("Then restart the server!");
-		} else {
+			$needServerRestart = true;
+		}
+		if ($needServerRestart) $this->getLogger()->warning("Then restart the server!");
+		else {
 			$this->getServer()->getPluginManager()->registerEvents($this, $this);
 			if (self::$KICK_PLAYERS) {
-				$this->getLogger()->alert("§cPlayers will be kicked if they are not authenticated to §3Waterdog§c!§r");
+				$this->getLogger()->alert("§cPlayers §nwill be kicked§r§c if they are not authenticated to §bWaterdog§3PE§c!§r");
 			} else {
-				$this->getLogger()->alert("§aPlayers will §nnot§r§a be kicked if they are not authenticated to §3Waterdog§a!§r");
+				$this->getLogger()->info("§aPlayers will §nnot§r§a be kicked if they are not authenticated to §bWaterdog§3PE§a!§r");
 			}
 		}
 	}
@@ -126,52 +220,11 @@ class WDFix extends PluginBase implements Listener{
 				return;
 			}
 			if (isset($clientData["Waterdog_XUID"])) {
-				$event->getOrigin()->setHandler(
-					new class(
-						Server::getInstance(),
-						$event->getOrigin(), function (XboxLivePlayerInfo $info) use ($event, $clientData, $packet): void{
-							$class = new ReflectionClass($event->getOrigin());
-							$property = $class->getProperty("info");
-							$property->setAccessible(true);
-							$property->setValue($event->getOrigin(), new XboxLivePlayerInfo($clientData["Waterdog_XUID"], $info->getUsername(), $info->getUuid(), $info->getSkin(), $info->getLocale(), $info->getExtraData()));
-						},
-						function (bool $isAuthenticated, bool $authRequired, ?string $error, ?string $clientPubKey) use ($event): void{
-							$class = new ReflectionClass($event->getOrigin());
-							$method = $class->getMethod("setAuthenticationStatus");
-							$method->setAccessible(true);
-							$method->invoke($event->getOrigin(), $isAuthenticated, $authRequired, $error, $clientPubKey);
-						}) extends LoginPacketHandler{
-							/**
-							 * Function parseClientData
-							 * @param string $clientDataJwt
-							 * @return ClientData
-							 */
-							protected function parseClientData(string $clientDataJwt): ClientData{
-								try {
-									[, $clientDataClaims,] = JwtUtils::parse($clientDataJwt);
-								} catch (JwtException $e) {
-									throw PacketHandlingException::wrap($e);
-								}
-								$mapper = new \JsonMapper;
-								$mapper->bEnforceMapType = false;
-								$mapper->bExceptionOnMissingData = true;
-								$mapper->bExceptionOnUndefinedProperty = true;
-								try {
-									$properties = array_map(fn(\ReflectionProperty $property) => $property->getName(), (new ReflectionClass(ClientData::class))->getProperties());
-									foreach ($clientDataClaims as $k => $v) {
-										if (!in_array($k, $properties)) {
-											unset($clientDataClaims[$k]);
-										}
-									}
-									unset($properties);
-									$clientData = $mapper->map($clientDataClaims, new ClientData);
-								} catch (JsonMapper_Exception $e) {
-									throw PacketHandlingException::wrap($e);
-								}
-								return $clientData;
-							}
-						}
-				);
+				$event->getOrigin()->setHandler(new WaterdogExtrasLoginPacketHandler(
+					Server::getInstance(),
+					$event->getOrigin(),
+					$clientData["Waterdog_XUID"]
+				));
 			}
 			if (isset($clientData["Waterdog_IP"])) {
 				$class = new ReflectionClass($event->getOrigin());
@@ -181,35 +234,5 @@ class WDFix extends PluginBase implements Listener{
 			}
 			unset($clientData);
 		}
-	}
-
-	/**
-	 * Function checkForUpdate
-	 * @return void
-	 */
-	private function checkForUpdate(): void{
-		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion()) extends AsyncTask{
-			public function __construct(protected string $version) {}
-			public function onRun(): void{
-				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/main/plugin.yml");
-				if (is_null($result)) return; // NOTE: no internet connection
-				if ($result->getCode() !== 200) return;
-				try {
-					$pluginYml = yaml_parse($result->getBody());
-				} catch (Throwable $e) {
-					return;
-				}
-				if (!$pluginYml) return;
-				$this->setResult($pluginYml["version"] ?? null);
-			}
-			public function onCompletion(): void{
-				$newVersion = $this->getResult();
-				if ($newVersion === null) return;
-				if (version_compare($newVersion, $this->version, ">")) {
-					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
-					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/latest");
-				}
-			}
-		});
 	}
 }

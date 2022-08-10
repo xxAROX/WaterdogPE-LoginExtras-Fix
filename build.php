@@ -1,104 +1,78 @@
 <?php
 /*
- *    Copyright 2022 Jan Sohn / xxAROX
- *
- *    Licensed under the Apache License, Version 2.0 (the "License");
- *    you may not use this file except in compliance with the License.
- *    You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- *    Unless required by applicable law or agreed to in writing, software
- *    distributed under the License is distributed on an "AS IS" BASIS,
- *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *    See the License for the specific language governing permissions and
- *    limitations under the License.
- *
+ * Copyright (c) Jan Sohn / xxAROX
+ * All rights reserved.
+ * I don't want anyone to use my source code without permission.
  */
 declare(strict_types=1);
 set_time_limit(0);
 ini_set("memory_limit", "-1");
-$enable_version_suffix = isset(getopt("vs")["vs"]);
-$secure = false;
-$buildOnLocalServer = true;
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+$localServerPath = "C:/Users/" . getenv("USERNAME") . "/Desktop/pmmp4"; // string|null
+$NAMESPACE = "xxAROX/WDFix";
 $packages = [
-	//EXAMPLE: "xxarox/web-server": ["paths" => ["src/","README.md"], "encode" => true]
 ];
+$encode = false;
+$enable_version_suffix = false;
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
+echo "[INFO]: Updating autoloader" . PHP_EOL;
+passthru("composer  --no-dev --no-interaction dump-autoload -o", $result_code);
+if ($result_code != 0) throw new ErrorException("Error while updated autoloader.");
 $loader = include_once __DIR__ . "/vendor/autoload.php";
 $startTime = microtime(true);
 $from = getcwd() . DIRECTORY_SEPARATOR;
 $description = yaml_parse_file($from . "plugin.yml");
 $to = __DIR__ . DIRECTORY_SEPARATOR . "out" . DIRECTORY_SEPARATOR . $description["name"] . DIRECTORY_SEPARATOR;
-$outputPath = $from . "out" . DIRECTORY_SEPARATOR . $description["name"] . ($enable_version_suffix ? "_v" . $description["version"] : "");
+$outputPath = $from . "out" . DIRECTORY_SEPARATOR . $description["name"] . ($enable_version_suffix
+		? "_v" . $description["version"] : "");
 echo "[INFO]: Starting.." . PHP_EOL;
 @mkdir($to, 0777, true);
 cleanDirectory($to);
+// include all important files
+if (is_dir($from . "src"))
+	copyDirectory($from . "src", $to . "src/${NAMESPACE}");
+if (is_file($from . "LICENSE"))
+	file_put_contents($to . "LICENSE", file_get_contents($from . "LICENSE"));
+if (is_file($from . "README.md"))
+	file_put_contents($to . "README.md", file_get_contents($from . "README.md"));
+if (is_dir($from . "resources"))
+	copyDirectory($from . "resources", $to . "resources");
+yaml_emit_file($to . "plugin.yml", $description);
+// include all packages
 foreach ($packages as $vendor => $obj) {
-	if (str_ends_with($vendor, "/")) {
-		$vendor = substr($vendor, 0, -1);
-	}
-	foreach ($obj["paths"] as $path) {
-		if (is_dir($from . "vendor/$vendor")) {
-			$package = json_decode(file_get_contents(__DIR__ . "vendor/{$vendor}/composer.json"), true);
-			foreach ($package["autoload"] ?? [] as $type => $obj) {
-				if (isset($package["autoload"][$type]) && is_string($package["autoload"][$type])) {
-					$package["autoload"][$type] = [$package["autoload"][$type]];
-					foreach ($package["autoload"][$type] as $k => $file) {
-						copyDirectory($from . "vendor/$vendor/$path/$file", "$vendor/$path/$file");
-						$package["autoload"][$type][$k] = "$vendor/$path/$file";
-					}
-				}
-			}
-			file_put_contents($to . "vendor/{$vendor}/package.json", json_encode($package, JSON_PRETTY_PRINT));
-		} else {
-			throw new RuntimeException("Package '$vendor' is not installed.");
+	if (str_ends_with($vendor, "/")) $vendor = substr($vendor, 0, -1);
+	foreach ($obj["paths"] as $paths) {
+		foreach ($paths as $from2 => $to2) {
+			if (is_dir($from . "vendor/$vendor")) copyDirectory($from . "vendor/$vendor/$from2", $to . $to2);
+			else throw new RuntimeException("Package '$vendor' is not installed.");
 		}
 	}
 }
-echo "[INFO]: Loaded " . count($packages) . " packages" . PHP_EOL;
-if (is_dir($from . "src")) {
-	copyDirectory($from . "src", $to . "src/xxAROX/WDFix");
-}
-if (is_file($from . "LICENSE")) {
-	file_put_contents($to . "LICENSE", file_get_contents($from . "LICENSE"));
-}
-if (is_file($from . "README.md")) {
-	file_put_contents($to . "README.md", file_get_contents($from . "README.md"));
-}
-if (is_dir($from . "resources")) {
-	copyDirectory($from . "resources", $to . "resources");
-}
-yaml_emit_file($to . "plugin.yml", $description);
-echo "[INFO]: Plugin files files" . PHP_EOL;
-passthru("composer  --no-dev --no-interaction dump-autoload -o", $result_code);
-if ($result_code != 0) {
-	throw new ErrorException("Error while updated autoloader.");
-}
+echo "[INFO]: Included " . count($packages) . " package" . (count($packages) == 1 ? "" : "s") . PHP_EOL;
+// plugin encoder
 $excluded = [];
 foreach ($packages as $vendor => $obj) {
-	if ($obj["encode"] ?? false) {
+	if ($obj["encode"] ?? false)
 		$excluded[] = $vendor . "/";
-	}
 }
-if ($secure) {
+echo "[INFO]: Encoding plugin.." . PHP_EOL;
+if ($encode) {
 	echo "[INFO]: Encoding plugin.." . PHP_EOL;
 	require_once "vendor/xxarox/plugin-security/src/Encoder.php";
 	(new \xxAROX\PluginSecurity\Encoder($to, $excluded))->encode();
 	echo "[INFO]: Encoding done!" . PHP_EOL;
+	$to = $to . "/output";
 }
-if (is_dir($to . "output/")) {
-	$to = $to . "output/";
-}
+echo "[INFO]: Encoding done!" . PHP_EOL;
 generatePhar($outputPath, $to);
-if ($buildOnLocalServer && is_dir("C:/Users/" . getenv("USERNAME") . "/Desktop/pmmp" . (is_array($description["api"])
-			? explode(".", $description["api"][0])[0]
-			: (is_string($description["api"]) ? explode(".", $description["api"])[0] : "???")) . "/plugins")) {
-	echo "[INFO]: Building on " . PHP_EOL;
-	$outputPath = "C:/Users/" . getenv("USERNAME") . "/Desktop/pmmp" . (is_array($description["api"])
-			? explode(".", $description["api"][0])[0]
-			: (is_string($description["api"]) ? explode(".", $description["api"])[0]
-				: "???")) . "/plugins" . DIRECTORY_SEPARATOR . $description["name"] . ($enable_version_suffix ? "_v" . $description["version"] : "");
-	generatePhar($outputPath, $to);
+if (!empty($localServerPath) && is_dir($localServerPath . "/plugins")) {
+	echo "[INFO]: Compiling.." . PHP_EOL;
+	generatePhar($localServerPath . "/plugins/" . $description["name"] . ($enable_version_suffix
+			? "_v" . $description["version"] : ""), $to);
 }
 /**
  * Function copyDirectory

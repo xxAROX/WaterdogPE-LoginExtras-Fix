@@ -1,2 +1,2 @@
 kick-players-if-no-waterdog-information-was-found: true
-kick-message: "§c{PREFIX}§e: §cNot authenticated to §3Waterdog§c!§f\n§cPlease connect to §3Waterdog§c!"
+kick-message: "§cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect via §bWaterdog§3PE§c to this server!"
