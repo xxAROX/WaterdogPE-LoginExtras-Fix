@@ -1,0 +1,36 @@
+name: "Bug report"
+description: Report a bug.
+labels: [ "bug" ]
+
+body:
+  - type: textarea
+    id: expect_behavior
+    attributes:
+      label: "What should happened?"
+      description: "Tell, what did you expect to happened?"
+      value: "Not applicable."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: "What actual happened?"
+      description: "Tell, what did you actual to happened?"
+      value: "Not applicable."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: "Steps to reproduce"
+      description: "Kindly explain in detail how to reproduce the bug."
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error
+      description: Error from the console
