@@ -17,10 +17,15 @@
  */
 declare(strict_types=1);
 namespace xxAROX\WDFix;
+use Closure;
 use JsonMapper;
 use JsonMapper_Exception;
+use pocketmine\command\Command;
+use pocketmine\command\CommandSender;
+use pocketmine\console\ConsoleCommandSender;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketReceiveEvent;
+use pocketmine\lang\Translatable;
 use pocketmine\network\mcpe\handler\LoginPacketHandler;
 use pocketmine\network\mcpe\JwtException;
 use pocketmine\network\mcpe\JwtUtils;
@@ -28,6 +33,11 @@ use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\mcpe\protocol\types\login\ClientData;
 use pocketmine\network\PacketHandlingException;
+use pocketmine\permission\DefaultPermissions;
+use pocketmine\permission\Permission;
+use pocketmine\permission\PermissionManager;
+use pocketmine\player\Player;
+use pocketmine\player\PlayerInfo;
 use pocketmine\player\XboxLivePlayerInfo;
 use pocketmine\plugin\PluginBase;
 use pocketmine\plugin\PluginDescription;
@@ -37,6 +47,7 @@ use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
 use pocketmine\utils\Internet;
 use pocketmine\utils\SingletonTrait;
+use pocketmine\utils\TextFormat;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionProperty;
@@ -52,19 +63,16 @@ use Throwable;
  * @project WaterdogPE-LoginExteras-Fixer
  */
 class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
-	public function __construct(Server $server, NetworkSession $session, string $Waterdog_XUID){
-		$playerInfoConsumer = function (XboxLivePlayerInfo $info) use ($session, $Waterdog_XUID): void{
-			$class = new ReflectionClass($session);
-			$property = $class->getProperty("info");
-			$property->setAccessible(true);
-			$property->setValue($session, new XboxLivePlayerInfo($Waterdog_XUID, $info->getUsername(), $info->getUuid(), $info->getSkin(), $info->getLocale(), $info->getExtraData()));
-		};
-		$authCallback = function (bool $isAuthenticated, bool $authRequired, ?string $error, ?string $clientPubKey) use ($session): void{
-			$class = new ReflectionClass($session);
-			$method = $class->getMethod("setAuthenticationStatus");
-			$method->setAccessible(true);
-			$method->invoke($session, $isAuthenticated, $authRequired, $error, $clientPubKey);
-		};
+	public function __construct(Server $server, NetworkSession $session, string $Waterdog_XUID, string $Waterdog_IP){
+		$playerInfoConsumer = Closure::bind(function (PlayerInfo $info) use ($session, $Waterdog_XUID, $Waterdog_IP): void{
+			$session->ip = $Waterdog_IP;
+			$session->info = $newInfo = new XboxLivePlayerInfo($Waterdog_XUID, $info->getUsername(), $info->getUuid(), $info->getSkin(), $info->getLocale(), $info->getExtraData());
+			$session->logger->setPrefix($session->getLogPrefix());
+			$session->logger->info("Player: " . TextFormat::AQUA . $info->getUsername() . TextFormat::RESET);
+		}, $this, $session);
+		$authCallback = Closure::bind(function (bool $isAuthenticated, bool $authRequired, ?string $error, ?string $clientPubKey) use ($session): void{
+			$session->setAuthenticationStatus(true, $authRequired, $error, $clientPubKey);
+		}, $this, $session);
 		parent::__construct($server, $session, $playerInfoConsumer, $authCallback);
 	}
 	/**
@@ -105,6 +113,7 @@ class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
  * @project WaterdogPE-LoginExtras-Fixer
  */
 class WDFix extends PluginBase implements Listener{
+	private static bool $PRODUCTION = true;
 	private static bool $KICK_PLAYERS = false;
 	private static string $KICK_MESSAGE = "";
 
@@ -126,6 +135,7 @@ class WDFix extends PluginBase implements Listener{
 	public function __construct(PluginLoader $loader, Server $server, PluginDescription $description, string $dataFolder, string $file, ResourceProvider $resourceProvider){
 		parent::__construct($loader, $server, $description, $dataFolder, $file, $resourceProvider);
 		self::setInstance($this);
+		self::$PRODUCTION = !str_ends_with($description->getVersion(), "-dev");
 	}
 
 	/**
@@ -133,8 +143,8 @@ class WDFix extends PluginBase implements Listener{
 	 * @param bool $development
 	 * @return void
 	 */
-	private function checkForUpdate(bool $development = false): void{
-		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion(), $development) extends AsyncTask{
+	private function checkForUpdate(): void{
+		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion(), WDFix::$PRODUCTION) extends AsyncTask{
 			public function __construct(protected string $version, protected bool $development) {}
 			public function onRun(): void{
 				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/" . ($this->development ? "development" : "main") . "/plugin.yml");
@@ -167,7 +177,7 @@ class WDFix extends PluginBase implements Listener{
 		$this->saveResource("config.yml");
 		self::$KICK_PLAYERS = (boolean)$this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", true);
 		self::$KICK_MESSAGE = $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect to §3Waterdog§c!");
-		$this->checkForUpdate(str_ends_with($this->getDescription()->getVersion(), "-dev"));
+		$this->checkForUpdate();
 	}
 
 	/**
@@ -177,7 +187,7 @@ class WDFix extends PluginBase implements Listener{
 	protected function onEnable(): void{
 		$needServerRestart = false;
 		if ($this->getServer()->getConfigGroup()->getPropertyBool("player.verify-xuid", true)) {
-			$this->getLogger()->warning("§eMay {$this->getDescription()->getPrefix()} dosn't work correctly fo prevent bugs set §f'§2player.verify-xuid§f' §ein §6pocketmine.yml §eto §f'§cfalse§f'");
+			$this->getLogger()->warning("§eMay {$this->getDescription()->getPrefix()} doesn't work correctly fo prevent bugs set §f'§2player.verify-xuid§f' §ein §6pocketmine.yml §eto §f'§cfalse§f'");
 			$needServerRestart = true;
 		}
 		if ($this->getServer()->getOnlineMode()) {
@@ -192,6 +202,39 @@ class WDFix extends PluginBase implements Listener{
 				$this->getLogger()->alert("§cPlayers §nwill be kicked§r§c if they are not authenticated to §bWaterdog§3PE§c!§r");
 			} else {
 				$this->getLogger()->info("§aPlayers will §nnot§r§a be kicked if they are not authenticated to §bWaterdog§3PE§a!§r");
+			}
+			if (!self::$PRODUCTION) {
+				$this->getLogger()->warning("§eThis is a development version of §6{$this->getDescription()->getPrefix()}§e!");
+				PermissionManager::getInstance()->addPermission(new Permission("wdfix.command", "Allows to use the command /wdfix!", [DefaultPermissions::ROOT_OPERATOR => true]));
+				$this->getServer()->getCommandMap()->register("WDFIX", new class extends Command{
+					public function __construct(){
+						parent::__construct("wdfix", "Debug command for WDFix", "/wdfix", []);
+						$this->setPermission("wdfix.command");
+					}
+					public function execute(CommandSender $sender, string $commandLabel, array $args){
+						if (!$sender instanceof Player) {
+							$sender->sendMessage("§cYou are not connected to WaterdogPE!");
+							return;
+						}
+						$networkPlayerInfo = $sender->getNetworkSession()->getPlayerInfo();
+						$playerInfo = $sender->getPlayerInfo();
+
+						$sender->sendMessage("§eNetwork player info§r§e: §f");
+						$sender->sendMessage("§aYour IP-Address: §f" . $sender->getNetworkSession()->getIp());
+						if ($networkPlayerInfo instanceof XboxLivePlayerInfo) {
+							$sender->sendMessage("§aYour XUID: §f" . $networkPlayerInfo->getXuid());
+						}else {
+							$sender->sendMessage("§cYour XUID: §f" . "§cNot found§f");
+						}
+						$sender->sendMessage("§ePlayer info§r§e: §f");
+						$sender->sendMessage("§aYour IP-Address: §f" . $sender->getNetworkSession()->getIp());
+						if ($playerInfo instanceof XboxLivePlayerInfo) {
+							$sender->sendMessage("§aYour XUID: §f" . $playerInfo->getXuid());
+						} else {
+							$sender->sendMessage("§cYour XUID: §f" . "§cNot found§f");
+						}
+					}
+				});
 			}
 		}
 	}
@@ -223,14 +266,9 @@ class WDFix extends PluginBase implements Listener{
 				$event->getOrigin()->setHandler(new WaterdogExtrasLoginPacketHandler(
 					Server::getInstance(),
 					$event->getOrigin(),
-					$clientData["Waterdog_XUID"]
+					$clientData["Waterdog_XUID"],
+					$clientData["Waterdog_IP"]
 				));
-			}
-			if (isset($clientData["Waterdog_IP"])) {
-				$class = new ReflectionClass($event->getOrigin());
-				$property = $class->getProperty("ip");
-				$property->setAccessible(true);
-				$property->setValue($event->getOrigin(), $clientData["Waterdog_IP"]);
 			}
 			unset($clientData);
 		}
