@@ -139,7 +139,7 @@ class WDFix extends PluginBase implements Listener{
 	 * @return void
 	 */
 	private function checkForUpdate(): void{
-		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion(), WDFix::$PRODUCTION) extends AsyncTask{
+		$this->getServer()->getAsyncPool()->submitTask(new class($this->getDescription()->getVersion(), !WDFix::$PRODUCTION) extends AsyncTask{
 			public function __construct(protected string $version, protected bool $development) {}
 			public function onRun(): void{
 				$result = Internet::getURL("https://raw.githubusercontent.com/xxAROX/WaterdogPE-LoginExtras-Fix/" . ($this->development ? "development" : "main") . "/plugin.yml");
