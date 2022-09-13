@@ -294,7 +294,7 @@ class WDFix extends PluginBase implements Listener{
 		$config->set("config-version", $current);
 		$this->getLogger()->notice("Updating config to newer version..");
 
-		if (version_compare($from, "1.5.2", "<")) {
+		if (version_compare($from, "1.5.3", "<")) {
 			$this->getLogger()->notice("Added documentation for config, delete the current and restart the server to apply documentations!");
 			$config->set("force-players-to-waterdog", $config->get("kick-players-if-no-waterdog-information-was-found", true));
 			$config->remove("kick-players-if-no-waterdog-information-was-found");
