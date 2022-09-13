@@ -187,7 +187,7 @@ class WDFix extends PluginBase implements Listener{
 	protected function onEnable(): void{
 		$needServerRestart = false;
 		if ($this->getServer()->getConfigGroup()->getPropertyBool("player.verify-xuid", true)) {
-			$this->getLogger()->warning("§eMay {$this->getDescription()->getPrefix()} doesn't work correctly fo prevent bugs set §f'§2player.verify-xuid§f' §ein §6pocketmine.yml §eto §f'§cfalse§f'");
+			$this->getLogger()->warning("§eMay {$this->getDescription()->getPrefix()} doesn't work correctly to prevent bugs set §f'§2player.verify-xuid§f' §ein §6pocketmine.yml §eto §f'§cfalse§f'");
 			$needServerRestart = true;
 		}
 		if ($this->getServer()->getOnlineMode()) {
