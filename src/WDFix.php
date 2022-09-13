@@ -158,7 +158,7 @@ class WDFix extends PluginBase implements Listener{
 				if ($newVersion === null) return;
 				if (version_compare($newVersion, $this->version, ">")) {
 					WDFix::getInstance()->getLogger()->notice("§eA new version of §6WaterdogPE-LoginExtras-Fix§e is available!");
-					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/" . ($this->development ? "dev" : "v{$newVersion}"));
+					WDFix::getInstance()->getLogger()->notice("§eYou can download it from §6https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix/releases/tag/" . ($this->development ? "dev" : "{$newVersion}"));
 				}
 			}
 		});
