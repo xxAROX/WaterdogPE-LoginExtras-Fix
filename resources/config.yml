@@ -1,2 +1,20 @@
-kick-players-if-no-waterdog-information-was-found: true
-kick-message: "§cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect via §bWaterdog§3PE§c to this server!"
+# config-version
+# DO NOT CHANGE THIS
+config-version: "1.5.2"
+
+# force-players-to-waterdog
+# true => If players are not connected via WaterdogPE, they will be kicked.
+# false => If players are not connected via WaterdogPE, they will not be kicked.
+force-players-to-waterdog: true
+
+# kick-message
+# Message that will be shown on kick if 'force-players-to-waterdog' is true
+kick-message: |-
+  §cNot authenticated to §bWaterdog§3PE§c!§f
+  §cPlease connect via §bWaterdog§3PE§c to this server!
+
+# waterdog-bind-address
+# Address that waterdog is bound(only needed to change if WaterdogPE is hosted on a different server then this server)
+# `localhost` will be replaced to `127.0.0.1`
+# `0.0.0.0`   will be replaced to `127.0.0.1`
+waterdog-bind-address: "127.0.0.1"

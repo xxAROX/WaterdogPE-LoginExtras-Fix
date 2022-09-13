@@ -18,14 +18,13 @@
 declare(strict_types=1);
 namespace xxAROX\WDFix;
 use Closure;
+use JsonException;
 use JsonMapper;
 use JsonMapper_Exception;
 use pocketmine\command\Command;
 use pocketmine\command\CommandSender;
-use pocketmine\console\ConsoleCommandSender;
 use pocketmine\event\Listener;
 use pocketmine\event\server\DataPacketReceiveEvent;
-use pocketmine\lang\Translatable;
 use pocketmine\network\mcpe\handler\LoginPacketHandler;
 use pocketmine\network\mcpe\JwtException;
 use pocketmine\network\mcpe\JwtUtils;
@@ -49,7 +48,6 @@ use pocketmine\utils\Internet;
 use pocketmine\utils\SingletonTrait;
 use pocketmine\utils\TextFormat;
 use ReflectionClass;
-use ReflectionException;
 use ReflectionProperty;
 use Throwable;
 
@@ -114,8 +112,6 @@ class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
  */
 class WDFix extends PluginBase implements Listener{
 	private static bool $PRODUCTION = true;
-	private static bool $KICK_PLAYERS = false;
-	private static string $KICK_MESSAGE = "";
 
 	use SingletonTrait{
 		setInstance as private;
@@ -140,7 +136,6 @@ class WDFix extends PluginBase implements Listener{
 
 	/**
 	 * Function checkForUpdate
-	 * @param bool $development
 	 * @return void
 	 */
 	private function checkForUpdate(): void{
@@ -175,9 +170,8 @@ class WDFix extends PluginBase implements Listener{
 	 */
 	protected function onLoad(): void{
 		$this->saveResource("config.yml");
-		self::$KICK_PLAYERS = (boolean)$this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", true);
-		self::$KICK_MESSAGE = $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect to §3Waterdog§c!");
 		$this->checkForUpdate();
+		$this->applyVersionChanges();
 	}
 
 	/**
@@ -198,7 +192,7 @@ class WDFix extends PluginBase implements Listener{
 		if ($needServerRestart) $this->getLogger()->warning("Then restart the server!");
 		else {
 			$this->getServer()->getPluginManager()->registerEvents($this, $this);
-			if (self::$KICK_PLAYERS) {
+			if ($this->getConfig()->get("force-players-to-waterdog", true)) {
 				$this->getLogger()->alert("§cPlayers §nwill be kicked§r§c if they are not authenticated to §bWaterdog§3PE§c!§r");
 			} else {
 				$this->getLogger()->info("§aPlayers will §nnot§r§a be kicked if they are not authenticated to §bWaterdog§3PE§a!§r");
@@ -243,7 +237,6 @@ class WDFix extends PluginBase implements Listener{
 	 * Function DataPacketReceiveEvent
 	 * @param DataPacketReceiveEvent $event
 	 * @return void
-	 * @throws ReflectionException
 	 * @priority MONITOR
 	 * @handleCancelled true
 	 */
@@ -256,10 +249,14 @@ class WDFix extends PluginBase implements Listener{
 				throw PacketHandlingException::wrap($e);
 			}
 			if (
-				(!isset($clientData["Waterdog_XUID"]) || !isset($clientData["Waterdog_IP"]))
-				&& $this->getConfig()->get("kick-players-if-no-waterdog-information-was-found", false)
+				(
+					!isset($clientData["Waterdog_XUID"])
+					|| !isset($clientData["Waterdog_IP"])
+					|| !$this->checkIpAddress($event->getOrigin()->getIp()) // NOTE: Get ip-address provided from waterdog downstream connection
+				)
+				&& $this->getConfig()->get("force-players-to-waterdog", true)
 			) {
-				$event->getOrigin()->disconnect(str_replace("{PREFIX}", $this->getDescription()->getPrefix(), self::$KICK_MESSAGE));
+				$event->getOrigin()->disconnect(str_replace("{PREFIX}", $this->getDescription()->getPrefix(), $this->getConfig()->get("kick-message", "§c{PREFIX}§e: §cNot authenticated to §bWaterdog§3PE§c!§f\n§cPlease connect to §3Waterdog§c!")));
 				return;
 			}
 			if (isset($clientData["Waterdog_XUID"])) {
@@ -272,5 +269,45 @@ class WDFix extends PluginBase implements Listener{
 			}
 			unset($clientData);
 		}
+	}
+
+	/**
+	 * Function checkIpAddress
+	 * @param string $providedIpAddress
+	 * @return bool
+	 */
+	private function checkIpAddress(string $providedIpAddress): bool{
+		if (strtolower($providedIpAddress) === "localhost" || $providedIpAddress === "0.0.0.0") $providedIpAddress = "127.0.0.1";
+		return $providedIpAddress == $this->getConfig()->get("waterdog-bind-address", "127.0.0.1");
+	}
+
+	/**
+	 * Function applyVersionChanges
+	 * @return void
+	 */
+	private function applyVersionChanges(): void{
+		$config = $this->getConfig();
+		$from = $config->get("config-version", "0.0.0");
+		$current = explode("-", $this->getDescription()->getVersion())[0];
+
+		if (version_compare($from, $current, ">=")) return;
+		$config->set("config-version", $current);
+		$this->getLogger()->notice("Updating config to newer version..");
+
+		if (version_compare($from, "1.5.2", "<")) {
+			$this->getLogger()->notice("Added documentation for config, delete the current and restart the server to apply documentations!");
+			$config->set("force-players-to-waterdog", $config->get("kick-players-if-no-waterdog-information-was-found", true));
+			$config->remove("kick-players-if-no-waterdog-information-was-found");
+			$config->set("waterdog-bind-address", "127.0.0.1");
+		}
+
+		if ($config->hasChanged()) {
+			try {
+				$config->save();
+			} catch (JsonException $exception) {
+				$this->getLogger()->logException($exception);
+			}
+		}
+		$this->getLogger()->info("§2Updated config to latest version!");
 	}
 }
