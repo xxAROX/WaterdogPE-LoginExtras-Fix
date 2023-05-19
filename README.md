@@ -20,7 +20,7 @@
 	</tr>
 	<tr>
 		<td>wdfix</td>
-		<td>Shows real information</td>
+		<td>Debug command for WDFix</td>
 		<td>wdfix.command</td>
 	</tr>
 </table>
