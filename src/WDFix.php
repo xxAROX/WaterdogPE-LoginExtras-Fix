@@ -58,7 +58,7 @@ use Throwable;
  * @author Jan Sohn / xxAROX
  * @date 10. August, 2022 - 18:25
  * @ide PhpStorm
- * @project WaterdogPE-LoginExteras-Fixer
+ * @project WaterdogPE-LoginExtras-Fixer
  */
 class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
 	public function __construct(Server $server, NetworkSession $session, string $Waterdog_XUID, string $Waterdog_IP){
