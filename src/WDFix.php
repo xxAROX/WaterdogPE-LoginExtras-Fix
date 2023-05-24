@@ -277,7 +277,7 @@ class WDFix extends PluginBase implements Listener{
 	 * @return bool
 	 */
 	private function checkIpAddress(string $providedIpAddress): bool{
-		if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) $providedIpAddress = gethostbyname($providedIpAddress);
+		if (!filter_var($providedIpAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) $providedIpAddress = gethostbyname($providedIpAddress);
 		if (strtolower($providedIpAddress) === "localhost" || $providedIpAddress === "0.0.0.0") $providedIpAddress = "127.0.0.1";
 		return $providedIpAddress == $this->getConfig()->get("waterdog-bind-address", "127.0.0.1");
 	}
