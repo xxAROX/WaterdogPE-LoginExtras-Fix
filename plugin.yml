@@ -5,5 +5,5 @@ website: "https://github.com/xxAROX/WaterdogPE-LoginExtras-Fix"
 description: "WaterdogPE login extra-data fix by xxAROX."
 prefix: "WaterdogPE-LoginExtras-Fix"
 
-api: [ "4.0.0" ]
+api: [ "4.0.0", "5.0.0" ]
 main: xxAROX\WDFix\WDFix

@@ -32,6 +32,11 @@
       <excludeFolder url="file://$MODULE_DIR$/vendor/brick/math" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/composer" />
       <excludeFolder url="file://$MODULE_DIR$/out" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/pocketmine/bedrock-block-upgrade-schema" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/pocketmine/netresearch-jsonmapper" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/pocketmine/bedrock-item-upgrade-schema" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/filesystem" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/symfony/polyfill-mbstring" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

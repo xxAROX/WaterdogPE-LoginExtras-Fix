@@ -58,7 +58,7 @@ use Throwable;
  * @author Jan Sohn / xxAROX
  * @date 10. August, 2022 - 18:25
  * @ide PhpStorm
- * @project WaterdogPE-LoginExteras-Fixer
+ * @project WaterdogPE-LoginExtras-Fixer
  */
 class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
 	public function __construct(Server $server, NetworkSession $session, string $Waterdog_XUID, string $Waterdog_IP){
@@ -277,6 +277,7 @@ class WDFix extends PluginBase implements Listener{
 	 * @return bool
 	 */
 	private function checkIpAddress(string $providedIpAddress): bool{
+		if (!filter_var($providedIpAddress, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) $providedIpAddress = gethostbyname($providedIpAddress);
 		if (strtolower($providedIpAddress) === "localhost" || $providedIpAddress === "0.0.0.0") $providedIpAddress = "127.0.0.1";
 		return $providedIpAddress == $this->getConfig()->get("waterdog-bind-address", "127.0.0.1");
 	}
