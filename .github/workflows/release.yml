@@ -5,7 +5,7 @@ on:
 
 jobs:
   release:
-    if: !contains(github.event.head_commit.message, 'ci ignore')
+    if: "!contains(github.event.head_commit.message, 'ci ignore')"
     name: "Create stable release"
     runs-on: ubuntu-latest
 
