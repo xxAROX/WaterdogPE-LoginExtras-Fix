@@ -96,7 +96,7 @@ class WaterdogExtrasLoginPacketHandler extends LoginPacketHandler{
 			unset($properties);
 			$clientData = $mapper->map($clientDataClaims, new ClientData);
 		} catch (JsonMapper_Exception $e) {
-			throw PacketHandlingException::wrap($e);
+			//throw PacketHandlingException::wrap($e);
 		}
 		return $clientData;
 	}
